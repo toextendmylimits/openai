@@ -1,5 +1,25 @@
 ## GPU Credit
 
+### Problem
+
+You're implementing a GPU credit system.
+
+We support three operations:
+
+createGrant(id, amount, ts, expTs)
+A block of credits becomes available at time ts and expires at time expTs.
+
+subtract(amount, ts)
+Spend credits at timestamp ts, always consuming the earliest-expiring credits first.
+If there aren’t enough credits at that moment, subtract itself does not throw.
+
+getBalance(ts)
+Return the number of unexpired credits available at exactly time ts.
+If at time ts (or any earlier time) a subtract did not have enough credits,
+then getBalance(ts) must throw an exception.
+
+### Solution
+
 Because both credit grants and subtract operations arrive out of order with arbitrary timestamps,
 I cannot update the balance eagerly inside createGrant or subtract.
 A later event with an earlier timestamp could completely change what the balance should have been at that time.
