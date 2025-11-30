@@ -18,6 +18,14 @@ Return the number of unexpired credits available at exactly time ts.
 If at time ts (or any earlier time) a subtract did not have enough credits,
 then getBalance(ts) must throw an exception.
 
+### Clarifying questions to ask
+
+“Can events come with timestamps out of order?”
+
+“Should subtract ever throw, or only getBalance(ts) throws when credits are insufficient?”
+
+“When subtracting, do I always consume credits that expire earliest first?”
+
 ### Solution
 
 Because both credit grants and subtract operations arrive out of order with arbitrary timestamps,
