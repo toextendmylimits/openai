@@ -26,6 +26,8 @@ then getBalance(ts) must throw an exception.
 
 “When subtracting, do I always consume credits that expire earliest first?”
 
+When a credit reaches its expiration time, is it already expired, or can it still be used at that moment?
+
 ### Solution
 
 Because both credit grants and subtract operations arrive out of order with arbitrary timestamps,
