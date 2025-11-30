@@ -116,4 +116,104 @@ class CreditSystem:
         # 4. Return total remaining credits
         return sum(amount for _, amount in active_credits)
 
+# Refactor use event class
+from dataclasses import dataclass
+from heapq import heappush, heappop
+
+class InsufficientCreditException(Exception):
+    pass
+
+@dataclass
+class GrantEvent:
+    amount: int
+    ts: int
+    expire_ts: int
+
+@dataclass
+class SubtractEvent:
+    amount: int
+    ts: int
+
+
+class GpuCreditSystem:
+    def __init__(self):
+        self.event_log = []
+
+    def createGrant(self, id, amount, ts, expire_ts):
+        self.event_log.append(GrantEvent(amount, ts, expire_ts))
+    
+    def subtract(self, amount, ts):
+        self.event_log.append(SubtractEvent(amount, ts))
+    
+    def getBalance(self, ts):
+        # Filter and sort events up to ts
+        events = [e for e in self.event_log if e.ts <= ts]
+        events.sort(key=lambda e: e.ts)
+
+        active_credits = []  # heap of (expire_ts, remaining_amount)
+
+        def expire_credits(up_to_ts):
+            while active_credits and active_credits[0][0] <= up_to_ts:
+                heappop(active_credits)
+
+        # Replay events
+        for event in events:
+            expire_credits(event.ts)
+
+            if isinstance(event, GrantEvent):
+                heappush(active_credits, (event.expire_ts, event.amount))
+
+            else:  # SubtractEvent
+                need = event.amount
+                while need > 0:
+                    if not active_credits:
+                        raise InsufficientCreditException()
+
+                    expire_ts, available = heappop(active_credits)
+
+                    if available > need:
+                        heappush(active_credits, (expire_ts, available - need))
+                        need = 0
+                    else:
+                        need -= available
+
+        expire_credits(ts)
+        return sum(amount for _, amount in active_credits)
+
+
+### Test Cases
+import pytest
+
+def test_case_1():
+    cs = CreditSystem()
+
+    cs.subtract(1, 30)
+
+    with pytest.raises(InsufficientCreditException):
+        cs.getBalance(30)
+
+    with pytest.raises(InsufficientCreditException):
+        cs.getBalance(40)
+
+    cs.createGrant("a", 1, 10, 100)
+
+    assert cs.getBalance(10) == 1
+    assert cs.getBalance(20) == 1
+    assert cs.getBalance(30) == 0
+
+def test_case_2():
+    cs = CreditSystem()
+
+    cs.createGrant("a", 3, 10, 60)
+    assert cs.getBalance(10) == 3
+
+    cs.createGrant("b", 2, 20, 40)
+    cs.subtract(1, 30)
+    cs.subtract(3, 50)
+
+    assert cs.getBalance(10) == 3
+    assert cs.getBalance(20) == 5
+    assert cs.getBalance(30) == 4
+    assert cs.getBalance(40) == 3
+    assert cs.getBalance(50) == 0
 
