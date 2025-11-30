@@ -180,6 +180,85 @@ class GpuCreditSystem:
         expire_credits(ts)
         return sum(amount for _, amount in active_credits)
 
+# Different interpretation - Only throw exception at end. Allow temporary insufficiency
+import heapq
+from dataclasses import dataclass
+
+class InsufficientCreditException(Exception):
+    pass
+
+@dataclass
+class GrantEvent:
+    amount: int
+    ts: int
+    expire_ts: int
+
+@dataclass
+class SubtractEvent:
+    amount: int
+    ts: int
+
+
+class GpuCreditSystem:
+    def __init__(self):
+        self.event_log = []
+
+    def createGrant(self, id, amount, ts, expire_ts):
+        self.event_log.append(GrantEvent(amount, ts, expire_ts))
+
+    def subtract(self, amount, ts):
+        self.event_log.append(SubtractEvent(amount, ts))
+
+    def getBalance(self, ts):
+        # Only events with timestamp <= query timestamp matter
+        events = [e for e in self.event_log if e.ts <= ts]
+        events.sort(key=lambda e: e.ts)
+
+        # Min-heap: (expire_ts, remaining_amount)
+        active = []
+        deficit = 0
+
+        def expire_up_to(t):
+            while active and active[0][0] <= t:
+                heapq.heappop(active)
+
+        for event in events:
+            expire_up_to(event.ts)
+
+            if isinstance(event, GrantEvent):
+                # Add new credit
+                heapq.heappush(active, (event.expire_ts, event.amount))
+
+                # Repair deficit using FEFO (earliest expiring first)
+                while deficit > 0 and active:
+                    exp, credit = heapq.heappop(active)
+                    if credit > deficit:
+                        heapq.heappush(active, (exp, credit - deficit))
+                        deficit = 0
+                    else:
+                        deficit -= credit
+
+            else:  # SubtractEvent
+                need = event.amount
+                while need > 0 and active:
+                    exp, credit = heapq.heappop(active)
+                    if credit > need:
+                        heapq.heappush(active, (exp, credit - need))
+                        need = 0
+                    else:
+                        need -= credit
+
+                # remaining need becomes deficit
+                if need > 0:
+                    deficit += need
+
+        expire_up_to(ts)
+
+        if deficit > 0:
+            raise InsufficientCreditException()
+
+        return sum(amount for _, amount in active)
+
 
 ### Test Cases
 import pytest
